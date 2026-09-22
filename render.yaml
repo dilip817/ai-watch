@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: student-assistant-api
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: student-assistant/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MODE
+        value: real
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DEVICE_SECRET
+        value: change-me-32-chars
+      - key: EDGE_TTS_VOICE
+        value: en-US-AriaNeural
+      - key: PYTHON_VERSION
+        value: "3.12.0"

@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Assistant — Device Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --purple: #7F77DD;
+  --teal: #1D9E75;
+  --amber: #EF9F27;
+  --coral: #D85A30;
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface2: #1e1e1e;
+  --text: #e8e8e8;
+  --text-dim: #888;
+  --radius: 12px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+/* Layout */
+.app { display: flex; width: 100%; max-width: 1200px; margin: 20px auto; gap: 24px; padding: 0 20px; }
+.device-col { flex: 0 0 280px; display: flex; flex-direction: column; align-items: center; }
+.sidebar { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+/* Device Frame */
+.device-frame {
+  width: 240px; height: 296px;
+  background: #000; border: 2px solid #333; border-radius: 20px;
+  overflow: hidden; position: relative;
+}
+
+/* Status Bar — home panel (2-col: date left, dot right) */
+.status-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 11px; color: var(--text-dim); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
+.status-dot.offline { background: var(--coral); }
+
+/* Status Bar — inner panels (3-col grid: left / center clock / right dot) */
+.status-bar-inner {
+  display: grid; grid-template-columns: 28px 1fr 28px;
+  align-items: center; padding: 6px 10px; font-size: 11px; color: var(--text-dim);
+}
+.status-bar-inner .sb-left { justify-self: start; }
+.status-bar-inner .sb-center { justify-self: center; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.status-bar-inner .sb-right { justify-self: end; }
+.status-bar-inner .back-arrow { cursor: pointer; font-size: 14px; color: var(--text-dim); transition: color 0.15s; }
+.status-bar-inner .back-arrow:hover { color: var(--text); }
+
+/* Panels */
+.panel { display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; flex-direction: column; }
+.panel.active { display: flex; }
+
+/* Panel 0: Home */
+.home-clock { font-size: 38px; font-weight: 800; text-align: center; margin: 6px 0 2px; letter-spacing: -1px; }
+.home-date-bar { font-size: 9px; color: var(--text-dim); text-align: center; margin-bottom: 6px; }
+
+/* Domain pill bar */
+.domain-bar { display: flex; gap: 3px; padding: 0 8px; margin-bottom: 6px; }
+.domain-pill { flex: 1; text-align: center; font-size: 10px; font-weight: 700; padding: 5px 2px; border-radius: 7px; cursor: pointer; background: var(--surface2); color: var(--text-dim); transition: all 0.15s; user-select: none; border: 1px solid transparent; }
+.domain-pill.active { background: var(--purple); color: #fff; border-color: var(--purple); }
+
+/* Categorized items on home */
+.home-items { padding: 0 8px; flex: 1; overflow-y: auto; }
+.cat-header { font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 5px 0 2px; }
+.cat-header.insight { color: var(--amber); }
+.cat-header.action  { color: var(--purple); }
+.cat-header.event   { color: var(--teal); }
+.cat-header.note    { color: #666; }
+.home-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; margin-bottom: 2px; background: #141414; border-left: 2px solid #333; }
+.home-item.insight { border-left-color: var(--amber); }
+.home-item.action  { border-left-color: var(--purple); }
+.home-item.event   { border-left-color: var(--teal); }
+.home-item.note    { border-left-color: #555; }
+.item-title { font-size: 10px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-eta   { font-size: 9px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+
+/* Action bar */
+.action-bar { display: flex; border-top: 1px solid #1a1a1a; flex-shrink: 0; }
+.action-btn { flex: 1; padding: 10px 4px; text-align: center; font-size: 10px; font-weight: 700; cursor: pointer; background: #0d0d0d; user-select: none; transition: opacity 0.15s; }
+.action-btn:hover { opacity: 0.8; }
+.action-btn.record { color: var(--coral); border-top: 2px solid var(--coral); }
+.action-btn.listen { color: var(--teal);  border-top: 2px solid var(--teal); }
+.action-btn.readall { color: var(--purple); border-top: 2px solid var(--purple); }
+.action-btn.recording { color: var(--coral); background: rgba(216,90,48,0.15); }
+
+/* Overdue highlighting */
+.home-item.overdue { background: rgba(216,90,48,0.12); border-left: 3px solid var(--coral); border-radius: 4px; padding-left: 6px; }
+.home-item.overdue .item-meta { color: var(--coral); font-weight: 600; }
+
+/* Swipeable item wrapper */
+.swipe-wrapper { position: relative; overflow: hidden; border-radius: 6px; margin-bottom: 2px; }
+.swipe-content { position: relative; z-index: 2; background: #000; transition: transform 0.25s ease; display: flex; align-items: center; gap: 8px; padding: 6px; }
+.swipe-content.swiped { transform: translateX(-168px); }
+.swipe-actions { position: absolute; right: 0; top: 0; bottom: 0; width: 168px; display: flex; z-index: 1; }
+.swipe-btn { flex: 1; border: none; font-family: inherit; font-size: 9px; font-weight: 700; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.swipe-btn.pause { background: var(--amber); color: #000; }
+.swipe-btn.finish { background: var(--teal); }
+.swipe-btn.delete { background: var(--coral); }
+
+/* Paused item styling — dim inner elements, NOT the container (keeps bg opaque over swipe actions) */
+.swipe-wrapper.paused .item-dot { opacity: 0.4; }
+.swipe-wrapper.paused .item-info { opacity: 0.5; }
+.swipe-wrapper.paused .item-title { font-style: italic; }
+.swipe-wrapper.paused .swipe-content { background: #0a0a0a; }
+.paused-tag { font-size: 7px; font-weight: 700; color: var(--amber); background: rgba(239,159,39,0.15); padding: 1px 5px; border-radius: 4px; margin-left: 4px; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+
+/* Panel 1: Recording */
+.recording-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.mic-circle { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--coral); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+.wave-bars { display: flex; gap: 4px; align-items: center; height: 40px; margin: 16px 0; }
+.wave-bar { width: 4px; border-radius: 2px; background: var(--coral); animation: wave 1.2s ease-in-out infinite; }
+.wave-bar:nth-child(1) { animation-delay: 0s; }
+.wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.wave-bar:nth-child(5) { animation-delay: 0.4s; }
+.wave-bar:nth-child(6) { animation-delay: 0.5s; }
+.wave-bar:nth-child(7) { animation-delay: 0.6s; }
+@keyframes wave { 0%,100% { height: 8px; } 50% { height: 32px; } }
+.rec-label { font-size: 14px; font-weight: 700; color: var(--coral); }
+.rec-timer { font-size: 11px; color: var(--text-dim); margin: 4px 0; }
+.rec-transcript { font-size: 9px; color: var(--text-dim); text-align: center; padding: 0 16px; max-height: 30px; overflow: hidden; }
+.rec-stop { font-size: 10px; color: var(--text-dim); margin-top: 8px; cursor: pointer; }
+
+/* Panel 2: Processing */
+.processing-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.spinner { width: 48px; height: 48px; border: 3px solid #222; border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.proc-label { font-size: 14px; font-weight: 700; margin-top: 12px; }
+.proc-bars { width: 80%; margin-top: 16px; }
+.proc-bar-wrap { margin-bottom: 8px; }
+.proc-bar-label { font-size: 9px; color: var(--text-dim); margin-bottom: 3px; }
+.proc-bar { height: 4px; border-radius: 2px; background: #222; overflow: hidden; }
+.proc-bar-fill { height: 100%; border-radius: 2px; width: 0%; transition: width 0.5s ease; }
+.proc-bar-fill.stt { background: var(--teal); }
+.proc-bar-fill.intent { background: var(--purple); }
+.proc-transcript { font-size: 9px; color: var(--text-dim); text-align: center; padding: 8px 16px; margin-top: 8px; background: #111; border-radius: 6px; margin: 8px 12px 0; }
+
+/* Panel 3: Saved */
+.saved-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.check-circle { width: 56px; height: 56px; border-radius: 50%; background: var(--teal); display: flex; align-items: center; justify-content: center; font-size: 28px; animation: popIn 0.4s ease; }
+.check-circle.error { background: var(--coral); }
+@keyframes popIn { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+.result-card { background: var(--surface2); border-radius: 10px; padding: 12px; margin: 12px; width: calc(100% - 24px); }
+.result-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; color: #fff; }
+.result-badge.reminder { background: var(--purple); }
+.result-badge.event { background: var(--teal); }
+.result-badge.note { background: var(--amber); }
+.result-badge.error { background: var(--coral); }
+.result-title { font-size: 13px; font-weight: 700; margin-top: 6px; }
+.result-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.result-sync { font-size: 9px; color: var(--teal); margin-top: 4px; }
+.result-sync.warn { color: var(--amber); }
+.saved-buttons { display: flex; gap: 8px; margin-top: 8px; }
+.saved-buttons button { padding: 6px 16px; border: none; border-radius: 8px; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.btn-view { background: var(--surface2); color: var(--text); }
+.btn-done { background: var(--teal); color: #fff; }
+
+/* Panel 4: Today */
+.today-panel { padding: 0 12px; padding-top: 4px; overflow-y: auto; flex: 1; }
+.today-section { margin-bottom: 10px; }
+.today-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.section-dot { width: 6px; height: 6px; border-radius: 50%; }
+.today-item-swipe { position: relative; overflow: hidden; border-radius: 0 4px 4px 0; margin-bottom: 2px; }
+.today-item-inner { position: relative; z-index: 2; background: #000; font-size: 11px; padding: 5px 6px 5px 12px; border-left: 2px solid #222; transition: transform 0.25s ease; }
+.today-item-inner.swiped { transform: translateX(-168px); }
+.today-item-inner.overdue { background: rgba(216,90,48,0.12); border-left-color: var(--coral) !important; }
+.today-item-swipe.paused .today-item-inner { color: rgba(232,232,232,0.5); background: #0a0a0a; }
+.today-item-swipe.paused .item-title { font-style: italic; opacity: 0.5; }
+.today-item-swipe .swipe-actions { position: absolute; right: 0; top: 0; bottom: 0; width: 168px; display: flex; z-index: 1; }
+.today-nav-row { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 6px 12px; }
+.today-nav-row .today-ask { font-size: 10px; color: var(--purple); cursor: pointer; }
+.today-nav-row .today-nav-btn { font-size: 10px; color: var(--teal); cursor: pointer; }
+
+/* Panel 6: Finished */
+.finished-panel { padding: 0 12px; padding-top: 4px; overflow-y: auto; flex: 1; }
+.finished-empty { text-align: center; color: var(--text-dim); padding: 40px 20px; font-size: 11px; }
+.finished-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-bottom: 1px solid #1a1a1a; }
+.finished-item .item-title { text-decoration: line-through; opacity: 0.6; }
+.finished-item .item-meta { font-size: 9px; color: var(--text-dim); }
+.finished-undo-btn { background: none; border: 1px solid var(--amber); color: var(--amber); border-radius: 6px; padding: 2px 8px; font-size: 8px; font-weight: 600; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+.finished-del-btn { background: none; border: 1px solid var(--coral); color: var(--coral); border-radius: 6px; padding: 2px 8px; font-size: 8px; font-weight: 600; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+
+/* Panel 5: Offline */
+.offline-panel { padding: 0 12px; padding-top: 4px; flex: 1; }
+.offline-banner { background: #2a1a0a; border: 1px solid var(--amber); border-radius: 8px; padding: 8px; font-size: 10px; color: var(--amber); margin-bottom: 10px; text-align: center; }
+.queue-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
+.queue-file { flex: 1; font-size: 10px; }
+.queue-badge { font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 8px; background: var(--amber); color: #000; }
+.queue-space { font-size: 9px; color: var(--text-dim); text-align: center; margin-top: 12px; }
+
+/* Domain badge (home status bar) */
+.domain-badge { display: inline-flex; align-items: center; gap: 2px; background: rgba(127,119,221,0.2); border: 1px solid rgba(127,119,221,0.35); border-radius: 10px; padding: 2px 6px; font-size: 8px; font-weight: 700; cursor: pointer; color: var(--text); transition: background 0.15s; user-select: none; }
+.domain-badge:hover { background: rgba(127,119,221,0.35); }
+
+/* Panel 7: Session Summary */
+.session-header { font-size: 11px; font-weight: 800; text-align: center; padding: 4px 0 6px; color: var(--text); }
+.session-body { padding: 0 10px; flex: 1; overflow-y: auto; }
+.session-category-title { font-size: 8px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; margin: 6px 0 3px; display: flex; align-items: center; gap: 4px; }
+.session-item-row { font-size: 10px; padding: 3px 6px; border-left: 2px solid #333; margin-bottom: 2px; border-radius: 0 4px 4px 0; }
+.session-item-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-item-meta { font-size: 8px; color: var(--text-dim); }
+.session-nav-row { display: flex; justify-content: center; gap: 14px; padding: 6px 12px; border-top: 1px solid #1a1a1a; }
+.session-nav-btn { font-size: 10px; font-weight: 700; cursor: pointer; padding: 4px 10px; border-radius: 8px; }
+.session-nav-btn.all { color: var(--purple); border: 1px solid var(--purple); }
+.session-nav-btn.home { color: var(--teal); border: 1px solid var(--teal); }
+
+/* Sidebar */
+.sidebar-section { background: var(--surface); border-radius: var(--radius); padding: 14px; }
+.sidebar-title { font-size: 12px; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+.sim-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.sim-btn { padding: 6px 10px; border: 1px solid #333; border-radius: 8px; background: var(--surface2); color: var(--text); font-family: inherit; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+.sim-btn:hover { border-color: var(--purple); color: var(--purple); }
+.sim-btn.active { border-color: var(--coral); color: var(--coral); }
+.sim-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.items-list { max-height: 260px; overflow-y: auto; }
+.items-list .swipe-wrapper { margin-bottom: 1px; }
+.items-list .swipe-content { background: var(--surface); padding: 5px 6px; }
+
+.log-area { max-height: 200px; overflow-y: auto; font-size: 10px; font-family: 'SF Mono', 'Consolas', monospace; }
+.log-entry { padding: 2px 0; border-bottom: 1px solid #111; color: var(--text-dim); }
+.log-entry .ts { color: #555; }
+.log-entry.ok { color: var(--teal); }
+.log-entry.err { color: var(--coral); }
+.log-entry.warn { color: var(--amber); }
+
+/* Buttons under device */
+.device-controls { margin-top: 12px; display: flex; gap: 8px; }
+.device-controls button { padding: 8px 14px; border: none; border-radius: 10px; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.device-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-ingest { background: var(--purple); color: #fff; }
+.btn-query { background: var(--teal); color: #fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Device Column -->
+  <div class="device-col">
+    <div class="device-frame" id="device">
+      <!-- Panel 0: Home -->
+      <div class="panel active" id="panel-home">
+        <div class="status-bar">
+          <span id="home-date"></span>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span class="status-dot" id="conn-dot"></span>
+          </div>
+        </div>
+        <div class="home-clock" id="home-clock"></div>
+        <div id="domain-bar" class="domain-bar"></div>
+        <div class="home-items" id="home-items"></div>
+        <div class="action-bar">
+          <div class="action-btn record" id="action-record" onclick="onActionVoice()">● VOICE</div>
+          <div class="action-btn readall viewall" id="action-readall" onclick="onActionReadAll()">VIEW ALL</div>
+        </div>
+      </div>
+
+      <!-- Panel 1: Recording -->
+      <div class="panel" id="panel-recording">
+        <div class="status-bar-inner"><span class="sb-left"></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot" id="conn-dot-r"></span></span></div>
+        <div class="recording-center">
+          <div class="mic-circle"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--coral)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
+          <div class="wave-bars">
+            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+          <div class="rec-label">Listening...</div>
+          <div class="rec-timer" id="rec-timer">0:00</div>
+          <div class="rec-transcript" id="rec-transcript"></div>
+          <div class="rec-stop" onclick="stopRecording()">Tap to stop</div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Processing -->
+      <div class="panel" id="panel-processing">
+        <div class="status-bar-inner"><span class="sb-left"></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot"></span></span></div>
+        <div class="processing-center">
+          <div class="spinner"></div>
+          <div class="proc-label">Processing</div>
+          <div class="proc-bars">
+            <div class="proc-bar-wrap">
+              <div class="proc-bar-label">STT</div>
+              <div class="proc-bar"><div class="proc-bar-fill stt" id="bar-stt"></div></div>
+            </div>
+            <div class="proc-bar-wrap">
+              <div class="proc-bar-label">Intent</div>
+              <div class="proc-bar"><div class="proc-bar-fill intent" id="bar-intent"></div></div>
+            </div>
+          </div>
+          <div class="proc-transcript" id="proc-transcript"></div>
+        </div>
+      </div>
+
+      <!-- Panel 3: Saved -->
+      <div class="panel" id="panel-saved">
+        <div class="status-bar-inner"><span class="sb-left"><span class="back-arrow" onclick="showPanel(0)">&larr;</span></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot"></span></span></div>
+        <div class="saved-center">
+          <div class="check-circle" id="check-circle">✓</div>
+          <div class="result-card" id="result-card">
+            <span class="result-badge" id="result-badge"></span>
+            <div class="result-title" id="result-title"></div>
+            <div class="result-meta" id="result-meta"></div>
+            <div class="result-sync" id="result-sync"></div>
+          </div>
+          <div class="saved-buttons">
+            <button class="btn-view" onclick="showPanel(4)">View all</button>
+            <button class="btn-done" onclick="showPanel(0)">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 4: Today -->
+      <div class="panel" id="panel-today">
+        <div class="status-bar-inner"><span class="sb-left"><span class="back-arrow" onclick="showPanel(0)">&larr;</span></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot"></span></span></div>
+        <div class="today-panel" id="today-panel"></div>
+        <div class="today-nav-row">
+          <div class="today-nav-btn" onclick="showPanel(6)">Finished</div>
+          <div class="today-ask" onclick="simulateQuery()">ask "what's next?"</div>
+        </div>
+      </div>
+
+      <!-- Panel 5: Offline -->
+      <div class="panel" id="panel-offline">
+        <div class="status-bar-inner"><span class="sb-left"><span class="back-arrow" onclick="showPanel(0)">&larr;</span></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot offline"></span></span></div>
+        <div class="offline-panel">
+          <div class="offline-banner">⚠ No internet connection — recordings queued on SD</div>
+          <div class="queue-item"><span class="queue-file">rec_001_1711234567.wav</span><span class="queue-badge">PENDING</span></div>
+          <div class="queue-item"><span class="queue-file">rec_002_1711234590.wav</span><span class="queue-badge">PENDING</span></div>
+          <div class="queue-item"><span class="queue-file">rec_003_1711234612.wav</span><span class="queue-badge">PENDING</span></div>
+          <div class="queue-space">SD: 14.2 GB free</div>
+        </div>
+      </div>
+
+      <!-- Panel 6: Finished Assignments -->
+      <div class="panel" id="panel-finished">
+        <div class="status-bar-inner"><span class="sb-left"><span class="back-arrow" onclick="showPanel(4)">&larr;</span></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot"></span></span></div>
+        <div style="padding:6px 12px 2px;font-size:13px;font-weight:700;">Finished</div>
+        <div class="finished-panel" id="finished-panel"></div>
+      </div>
+
+      <!-- Panel 7: Session Summary -->
+      <div class="panel" id="panel-session">
+        <div class="status-bar-inner"><span class="sb-left"><span class="back-arrow" onclick="showPanel(0)">&larr;</span></span><span class="sb-center mc"></span><span class="sb-right"><span class="status-dot"></span></span></div>
+        <div class="session-header" id="session-header">Session Summary</div>
+        <div class="session-body" id="session-body"></div>
+        <div class="session-nav-row">
+          <span class="session-nav-btn all" onclick="showPanel(4)">View All</span>
+          <span class="session-nav-btn home" onclick="showPanel(0)">Home</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="device-controls">
+      <button class="btn-ingest" id="btn-ingest" onclick="simulateIngest()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Record</button>
+      <button class="btn-query" id="btn-query" onclick="simulateQuery()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ask</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Simulate</div>
+      <div class="sim-buttons">
+        <button class="sim-btn" onclick="showPanel(0)">Home</button>
+        <button class="sim-btn" onclick="showPanel(1)">Recording</button>
+        <button class="sim-btn" onclick="showPanel(2)">Processing</button>
+        <button class="sim-btn" onclick="showPanel(3)">Saved</button>
+        <button class="sim-btn" onclick="showPanel(4)">Today</button>
+        <button class="sim-btn" onclick="showPanel(5)">Offline</button>
+        <button class="sim-btn" onclick="showPanel(6)">Finished</button>
+        <button class="sim-btn" onclick="showPanel(7)">Session</button>
+        <button class="sim-btn" id="sim-ingest" onclick="simulateIngest()">▶ Ingest</button>
+        <button class="sim-btn" id="sim-query" onclick="simulateQuery()">▶ Query</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Activity Domain</div>
+      <div class="sim-buttons" id="domain-buttons"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Items</div>
+      <div class="items-list" id="sidebar-items"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Activity Log</div>
+      <div class="log-area" id="log-area"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BACKEND = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : 'https://student-assistant-api.onrender.com';
+const DEVICE_ID = 'demo-device';
+const DEVICE_SECRET = 'change-me-32-chars';
+let currentPanel = 0;
+let recInterval = null;
+let recSeconds = 0;
+let isBusy = false;
+let recMode = null;  // 'ingest' or 'query'
+
+// --- Domain config ---
+const DOMAINS = [
+  { id: 'sports',    name: 'Sports',  color: '#3A9E5F' },
+  { id: 'music',     name: 'Music',   color: '#7F77DD' },
+  { id: 'classroom', name: 'Class',   color: '#EF9F27' },
+  { id: 'general',   name: 'General', color: '#8A8A9A' },
+];
+let currentDomainIdx = parseInt(localStorage.getItem('domainIdx') || '3', 10);
+
+function renderDomainBar() {
+  const bar = document.getElementById('domain-bar');
+  if (!bar) return;
+  bar.innerHTML = DOMAINS.map((d, i) =>
+    `<div class="domain-pill${i === currentDomainIdx ? ' active' : ''}"
+          onclick="setDomain(${i})">${d.name}</div>`
+  ).join('');
+}
+
+function setDomain(idx) {
+  currentDomainIdx = idx;
+  localStorage.setItem('domainIdx', String(idx));
+  renderDomainBar();
+  log(`Domain: ${DOMAINS[idx].name}`);
+}
+
+function cycleDomain() { setDomain((currentDomainIdx + 1) % DOMAINS.length); }
+
+// --- HMAC-SHA256 token (Web Crypto API) ---
+async function makeToken(deviceId, secret) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(deviceId));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function makeHeaders() {
+  const token = await makeToken(DEVICE_ID, DEVICE_SECRET);
+  return {
+    'x-device-id': DEVICE_ID,
+    'x-device-token': token,
+    'x-device-ts': String(Date.now()),
+    'x-domain': DOMAINS[currentDomainIdx].id,
+  };
+}
+
+// --- Clock ---
+function updateClock() {
+  const now = new Date();
+  let h = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const timeStr = `${h}:${String(m).padStart(2,'0')} ${ampm}`;
+  document.getElementById('home-clock').textContent = timeStr;
+  const opts = { weekday:'short', month:'short', day:'numeric' };
+  document.getElementById('home-date').textContent =
+    now.toLocaleDateString('en-US', opts);
+  // Update all mini clocks across panels
+  document.querySelectorAll('.mc').forEach(el => { el.textContent = timeStr; });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// --- Panel switching ---
+function showPanel(n) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const panels = ['panel-home','panel-recording','panel-processing',
+    'panel-saved','panel-today','panel-offline','panel-finished','panel-session'];
+  if (n >= 0 && n < panels.length) {
+    document.getElementById(panels[n]).classList.add('active');
+  }
+  currentPanel = n;
+  if (n === 6) renderFinishedPanel();
+}
+
+// --- Busy state management ---
+function updateVoiceBtn(state) {
+  const btn = document.getElementById('action-record');
+  if (!btn) return;
+  if (currentAudio && !currentAudio.paused) {
+    btn.textContent = '■ STOP'; btn.style.color = 'var(--teal)';
+  } else if (isBusy && recMode) {
+    btn.textContent = '■ STOP'; btn.style.color = 'var(--amber)';
+  } else {
+    btn.textContent = '● VOICE'; btn.style.color = '';
+  }
+}
+
+function setBusy(busy) {
+  isBusy = busy;
+  updateVoiceBtn();
+}
+  document.getElementById('btn-ingest').disabled = busy;
+  document.getElementById('btn-query').disabled = busy;
+  document.getElementById('sim-ingest').disabled = busy;
+  document.getElementById('sim-query').disabled = busy;
+}
+
+// --- Logging ---
+function log(msg, cls='') {
+  const area = document.getElementById('log-area');
+  const ts = new Date().toLocaleTimeString();
+  area.innerHTML += `<div class="log-entry ${cls}"><span class="ts">${ts}</span> ${msg}</div>`;
+  area.scrollTop = area.scrollHeight;
+}
+
+// --- Build silent WAV in JS ---
+function makeSilentWav(durationSecs = 1) {
+  const sampleRate = 16000, channels = 1, bitsPerSample = 16;
+  const numSamples = sampleRate * durationSecs;
+  const dataSize = numSamples * channels * (bitsPerSample / 8);
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  function writeStr(offset, str) { for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); }
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);             // PCM
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * channels * (bitsPerSample/8), true);
+  view.setUint16(32, channels * (bitsPerSample/8), true);
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+  // Data bytes are already zero-initialized (silence)
+  return new Blob([buffer], {type:'audio/wav'});
+}
+
+// --- Fetch items ---
+async function fetchItems() {
+  try {
+    const resp = await fetch(`${BACKEND}/items/${DEVICE_ID}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const items = await resp.json();
+    allItems = items;
+    renderHomeItems(items);
+    renderSidebarItems(items);
+    renderTodayPanel(items);
+    if (currentPanel === 6) renderFinishedPanel();
+    log(`Loaded ${items.length} items`, 'ok');
+  } catch(e) {
+    log(`Failed to fetch items: ${e.message}`, 'err');
+  }
+}
+
+// --- Overdue check ---
+function isOverdue(item) {
+  if (!item.due_date) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return item.due_date < today && !item.done;
+}
+
+function formatCreatedAt(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// --- Store all items for finished panel ---
+let allItems = [];
+
+// --- Finish item (mark done + navigate to finished) ---
+async function finishItem(itemId) {
+  try {
+    document.querySelectorAll('.swiped').forEach(el => el.classList.remove('swiped'));
+    const resp = await fetch(`${BACKEND}/items/${itemId}/toggle`, { method: 'PATCH' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const item = await resp.json();
+    if (!item.done) {
+      await fetch(`${BACKEND}/items/${itemId}/toggle`, { method: 'PATCH' });
+    }
+    log(`Finished: ${itemId}`, 'ok');
+    await sleep(280);
+    await fetchItems();
+  } catch(e) {
+    log(`Finish failed: ${e.message}`, 'err');
+  }
+}
+
+// --- Undo finish (mark as not done) ---
+async function undoFinish(itemId) {
+  try {
+    const resp = await fetch(`${BACKEND}/items/${itemId}/toggle`, { method: 'PATCH' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const item = await resp.json();
+    if (item.done) {
+      // Still done — toggle again
+      await fetch(`${BACKEND}/items/${itemId}/toggle`, { method: 'PATCH' });
+    }
+    log(`Unfinished: ${itemId}`, 'ok');
+    await fetchItems();
+    renderFinishedPanel();
+  } catch(e) {
+    log(`Undo failed: ${e.message}`, 'err');
+  }
+}
+
+// --- Pause / Resume item ---
+async function pauseItem(itemId) {
+  try {
+    // Close all open swipes first to prevent visual glitch
+    document.querySelectorAll('.swiped').forEach(el => el.classList.remove('swiped'));
+    const resp = await fetch(`${BACKEND}/items/${itemId}/pause`, { method: 'PATCH' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const item = await resp.json();
+    log(`${item.paused ? 'Paused' : 'Resumed'}: ${item.title}`, 'warn');
+    // Wait for swipe close animation before re-rendering
+    await sleep(280);
+    await fetchItems();
+  } catch(e) {
+    log(`Pause failed: ${e.message}`, 'err');
+  }
+}
+
+// --- Delete item ---
+async function deleteItem(itemId) {
+  try {
+    document.querySelectorAll('.swiped').forEach(el => el.classList.remove('swiped'));
+    const resp = await fetch(`${BACKEND}/items/${itemId}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    log(`Deleted item ${itemId}`, 'ok');
+    await sleep(280);
+    await fetchItems();
+    if (currentPanel === 6) renderFinishedPanel();
+  } catch(e) {
+    log(`Delete failed: ${e.message}`, 'err');
+  }
+}
+
+// --- Swipe handling ---
+function initSwipe(container) {
+  container.querySelectorAll('.swipe-content, .today-item-inner').forEach(el => {
+    let startX = 0, currentX = 0, swiping = false;
+    el.addEventListener('touchstart', e => { startX = e.touches[0].clientX; swiping = true; }, { passive: true });
+    el.addEventListener('mousedown', e => { startX = e.clientX; swiping = true; });
+    el.addEventListener('touchmove', e => {
+      if (!swiping) return;
+      currentX = e.touches[0].clientX;
+      const dx = currentX - startX;
+      if (dx < -30) { el.classList.add('swiped'); swiping = false; }
+      else if (dx > 30) { el.classList.remove('swiped'); swiping = false; }
+    }, { passive: true });
+    el.addEventListener('mousemove', e => {
+      if (!swiping) return;
+      currentX = e.clientX;
+      const dx = currentX - startX;
+      if (dx < -30) { el.classList.add('swiped'); swiping = false; }
+      else if (dx > 30) { el.classList.remove('swiped'); swiping = false; }
+    });
+    el.addEventListener('touchend', () => { swiping = false; });
+    el.addEventListener('mouseup', () => { swiping = false; });
+    el.addEventListener('mouseleave', () => { swiping = false; });
+  });
+}
+
+// --- Build swipeable item HTML ---
+function swipeItemHTML(item, prefix, bgClass) {
+  const overdue = isOverdue(item);
+  const doneClass = item.done ? ' done' : '';
+  const overdueClass = overdue ? ' overdue' : '';
+  const pausedClass = item.paused ? ' paused' : '';
+  const pauseLabel = item.paused ? 'Resume' : 'Pause';
+  const bg = bgClass || '';
+  return `<div class="swipe-wrapper${overdueClass}${pausedClass}">
+    <div class="swipe-actions">
+      <button class="swipe-btn pause" onclick="pauseItem('${item.id}')">${pauseLabel}</button>
+      <button class="swipe-btn finish" onclick="finishItem('${item.id}')">Finish</button>
+      <button class="swipe-btn delete" onclick="deleteItem('${item.id}')">Delete</button>
+    </div>
+    <div class="swipe-content${bg}" data-id="${prefix}-${item.id}">
+      <div class="item-dot ${item.type}"></div>
+      <div class="item-info">
+        <div class="item-title${doneClass}">${esc(item.title)}</div>
+        <div class="item-meta">${overdue ? 'OVERDUE · ' : ''}${item.due_date || item.datetime || item.type}</div>
+      </div>${item.paused ? '<span class="paused-tag">paused</span>' : ''}
+    </div>
+  </div>`;
+}
+
+function renderHomeItems(items) {
+  const el = document.getElementById('home-items');
+  const active = items.filter(i => !i.done);
+  if (!active.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:24px 12px;font-size:10px;">No items yet.<br>Tap RECORD to add one.</div>';
+    return;
+  }
+
+  const CATS = [
+    { key: 'insight', label: 'INSIGHTS' },
+    { key: 'action',  label: 'ACTIONS' },
+    { key: 'event',   label: 'EVENTS' },
+    { key: 'note',    label: 'NOTES' },
+  ];
+
+  let html = '';
+  for (const cat of CATS) {
+    const group = active.filter(i => (i.category || i.type) === cat.key);
+    if (!group.length) continue;
+    html += `<div class="cat-header ${cat.key}">${cat.label}</div>`;
+    for (const item of group) {
+      const eta = formatEta(item.due_date, item.datetime, item.recurrence);
+      html += `<div class="home-item ${cat.key}">
+        <span class="item-title">${esc(item.title)}</span>
+        ${eta ? `<span class="item-eta">${esc(eta)}</span>` : ''}
+      </div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function formatEta(due_date, datetime, recurrence) {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (due_date) {
+    const [, m, d] = due_date.split('-').map(Number);
+    if (m) return `${MONTHS[m-1]} ${d}`;
+  }
+  if (datetime) {
+    const [datePart, timePart] = datetime.split('T');
+    const [, m, d] = datePart.split('-').map(Number);
+    if (timePart && m) {
+      const [hh, mm] = timePart.split(':').map(Number);
+      const h12 = hh % 12 || 12;
+      const ampm = hh >= 12 ? 'pm' : 'am';
+      const time = mm === 0 ? `${h12}${ampm}` : `${h12}:${String(mm).padStart(2,'0')}${ampm}`;
+      return `${MONTHS[m-1]} ${d} ${time}`;
+    }
+    if (m) return `${MONTHS[m-1]} ${d}`;
+  }
+  if (recurrence) return `↻ ${recurrence}`;
+  return '';
+}
+
+// --- Action bar handlers ---
+function onActionVoice() {
+  if (currentAudio && !currentAudio.paused) {
+    stopCurrentAudio();
+    updateVoiceBtn();
+    return;
+  }
+  if (isBusy) {
+    stopRecording();
+  } else {
+    simulateVoice();
+  }
+}
+
+async function simulateVoice() {
+  /* Unified voice: record -> /voice -> play response */
+  await startRecording('query', '');
+}
+
+function onActionReadAll() {
+  /* VIEW ALL — navigate to the All Items screen */
+  stopCurrentAudio();
+  showPanel(4);
+}
+
+function stopCurrentAudio() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = '';
+    currentAudio = null;
+  }
+}
+}
+
+function renderSidebarItems(items) {
+  const el = document.getElementById('sidebar-items');
+  const active = items.filter(i => !i.done);
+  if (!active.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:16px;font-size:11px;">No upcoming activities.</div>';
+    return;
+  }
+  el.innerHTML = active.map(i => swipeItemHTML(i, 'sb', '')).join('');
+  initSwipe(el);
+}
+
+function renderTodayPanel(items) {
+  const el = document.getElementById('today-panel');
+  const active = items.filter(i => !i.done);
+  const reminders = active.filter(i => i.type === 'reminder');
+  const events = active.filter(i => i.type === 'event');
+  const notes = active.filter(i => i.type === 'note');
+  const finished = items.filter(i => i.done);
+  let html = '';
+
+  function renderTodaySection(list, color) {
+    list.forEach(item => {
+      const overdue = isOverdue(item);
+      const pauseLabel = item.paused ? 'Resume' : 'Pause';
+      html += `<div class="today-item-swipe${item.paused ? ' paused' : ''}">
+        <div class="swipe-actions">
+          <button class="swipe-btn pause" onclick="pauseItem('${item.id}')">${pauseLabel}</button>
+          <button class="swipe-btn finish" onclick="finishItem('${item.id}')">Finish</button>
+          <button class="swipe-btn delete" onclick="deleteItem('${item.id}')">Delete</button>
+        </div>
+        <div class="today-item-inner${overdue ? ' overdue' : ''}" style="border-left-color:${overdue ? 'var(--coral)' : color}">
+          <span class="item-title">${esc(item.title)}</span>${item.paused ? ' <span class="paused-tag">paused</span>' : ''}${item.due_date ? ' <span style="font-size:9px;color:var(--text-dim)">· '+item.due_date+'</span>' : ''}${overdue ? ' <span style="font-size:8px;color:var(--coral);font-weight:700">OVERDUE</span>' : ''}
+        </div>
+      </div>`;
+    });
+  }
+
+  if (reminders.length) {
+    html += `<div class="today-section"><div class="today-section-title"><span class="section-dot" style="background:var(--purple)"></span>REMINDERS</div>`;
+    renderTodaySection(reminders, 'var(--purple)');
+    html += '</div>';
+  }
+  if (events.length) {
+    html += `<div class="today-section"><div class="today-section-title"><span class="section-dot" style="background:var(--teal)"></span>EVENTS</div>`;
+    renderTodaySection(events, 'var(--teal)');
+    html += '</div>';
+  }
+  if (notes.length) {
+    html += `<div class="today-section"><div class="today-section-title"><span class="section-dot" style="background:var(--amber)"></span>NOTES</div>`;
+    renderTodaySection(notes, 'var(--amber)');
+    html += '</div>';
+  }
+
+  if (!active.length) {
+    html = '<div style="text-align:center;color:var(--text-dim);padding:24px 12px;font-size:11px;">No upcoming activities.<br>Use the mic to add one!</div>';
+  }
+
+  el.innerHTML = html;
+  initSwipe(el);
+}
+
+// --- Finished Assignments Panel ---
+function renderFinishedPanel() {
+  const el = document.getElementById('finished-panel');
+  const finished = allItems.filter(i => i.done);
+  if (!finished.length) {
+    el.innerHTML = '<div class="finished-empty">No finished assignments yet.<br>Swipe left on an item and tap Finish!</div>';
+    return;
+  }
+  el.innerHTML = finished.map(item => `
+    <div class="finished-item">
+      <div class="item-dot ${item.type}"></div>
+      <div class="item-info">
+        <div class="item-title">${esc(item.title)}</div>
+        <div class="item-meta">${item.type} · ${item.due_date || item.datetime || ''} · Done ${formatCreatedAt(item.created_at)}</div>
+      </div>
+      <button class="finished-undo-btn" onclick="undoFinish('${item.id}')">Undo</button>
+      <button class="finished-del-btn" onclick="deleteItem('${item.id}')">Del</button>
+    </div>`).join('');
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+// --- Real microphone recording ---
+let mediaRecorder = null;
+let currentAudio = null;  // Track playing audio for stop support
+let audioChunks = [];
+let recordedBlob = null;
+
+async function startRecording(mode, hint = '') {
+  if (isBusy) return;
+  setBusy(true);
+  recMode = mode;
+
+  showPanel(1);
+  recSeconds = 0;
+  document.getElementById('rec-timer').textContent = '0:00';
+  document.getElementById('rec-transcript').textContent = hint || 'Speak now...';
+  log(`Recording started (${mode})...`);
+
+  // Request microphone access
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    recordedBlob = null;
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      // Stop all tracks to release the microphone
+      stream.getTracks().forEach(t => t.stop());
+      recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      log(`Captured ${(recordedBlob.size / 1024).toFixed(1)} KB audio`);
+
+      const mode = recMode;
+      recMode = null;
+      if (mode === 'query') {
+        processQuery();
+      } else {
+        processIngest();
+      }
+    };
+
+    mediaRecorder.start(250); // collect data every 250ms
+
+    recInterval = setInterval(() => {
+      recSeconds++;
+      const m = Math.floor(recSeconds/60);
+      const s = recSeconds%60;
+      document.getElementById('rec-timer').textContent = `${m}:${String(s).padStart(2,'0')}`;
+    }, 1000);
+
+  } catch(err) {
+    log(`Microphone access denied: ${err.message}`, 'err');
+    document.getElementById('rec-transcript').textContent = 'Microphone blocked — check browser permissions';
+    setBusy(false);
+  }
+}
+
+// --- Simulate Ingest ---
+function simulateIngest() {
+  startRecording('ingest');
+}
+
+// --- Stop recording (called by "Tap to stop" button) ---
+function stopRecording() {
+  if (recInterval) { clearInterval(recInterval); recInterval = null; }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop(); // triggers onstop → processIngest/processQuery
+  }
+}
+
+async function processIngest() {
+  // Panel 2: Processing
+  showPanel(2);
+  document.getElementById('bar-stt').style.width = '0%';
+  document.getElementById('bar-intent').style.width = '0%';
+  document.getElementById('proc-transcript').textContent = '';
+
+  // Animate STT bar while waiting
+  await sleep(200);
+  document.getElementById('bar-stt').style.width = '60%';
+  document.getElementById('proc-transcript').textContent = 'Transcribing audio...';
+  log('STT processing...');
+
+  // Use real recorded audio (or fallback to silent WAV if mic failed)
+  const audioBlob = recordedBlob || makeSilentWav(recSeconds || 2);
+  const ext = recordedBlob ? 'webm' : 'wav';
+  const form = new FormData();
+  form.append('audio', audioBlob, `recording.${ext}`);
+
+  try {
+    const headers = await makeHeaders();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    const resp = await fetch(`${BACKEND}/ingest`, {
+      method: 'POST',
+      headers: headers,
+      body: form,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    }
+    const data = await resp.json();
+
+    // Complete STT bar
+    document.getElementById('bar-stt').style.width = '100%';
+    await sleep(300);
+
+    // Show transcript
+    document.getElementById('proc-transcript').textContent = data.transcript || '(no transcript)';
+
+    // Animate intent bar
+    document.getElementById('bar-intent').style.width = '100%';
+    log(`Ingest: ${data.status} — ${data.title || '(empty)'}`, data.status === 'ok' ? 'ok' : data.status === 'error' ? 'err' : 'warn');
+
+    await sleep(600);
+
+    // Handle different statuses
+    if (data.status === 'empty') {
+      log('Empty transcript — returning to home', 'warn');
+      showPanel(0);
+      setBusy(false);
+      return;
+    }
+
+    if (data.status === 'error') {
+      showPanel(3);
+      document.getElementById('check-circle').className = 'check-circle error';
+      document.getElementById('check-circle').textContent = '✗';
+      const badge = document.getElementById('result-badge');
+      badge.textContent = 'error';
+      badge.className = 'result-badge error';
+      document.getElementById('result-title').textContent = 'Processing failed';
+      document.getElementById('result-meta').textContent = 'Please try again';
+      document.getElementById('result-sync').textContent = '';
+      setBusy(false);
+      return;
+    }
+
+    // Panel 3: Saved (ok or confirm_needed)
+    // Refresh item lists first
+    await fetchItems();
+
+    // Multi-item ingest → show session summary; single item → saved panel
+    if (data.items && data.items.length > 1 && data.session_id) {
+      renderSessionSummary(data);
+      showPanel(7);
+    } else {
+      showPanel(3);
+      document.getElementById('check-circle').className = 'check-circle';
+      document.getElementById('check-circle').textContent = '✓';
+
+      const badge = document.getElementById('result-badge');
+      badge.textContent = data.type || 'note';
+      badge.className = `result-badge ${data.type || 'note'}`;
+      document.getElementById('result-title').textContent = data.title || '';
+      document.getElementById('result-meta').textContent =
+        data.due_date || data.datetime || '';
+
+      const syncEl = document.getElementById('result-sync');
+      if (data.status === 'confirm_needed') {
+        syncEl.textContent = '⚠ Low confidence — needs confirmation';
+        syncEl.className = 'result-sync warn';
+      } else {
+        syncEl.textContent = '✓ Saved';
+        syncEl.className = 'result-sync';
+      }
+    }
+  } catch(e) {
+    const msg = e.name === 'AbortError' ? 'Request timed out' : e.message;
+    log(`Ingest failed: ${msg}`, 'err');
+    showPanel(0);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// --- Simulate Query ---
+function simulateQuery() {
+  startRecording('query', 'Asking question...');
+}
+
+// --- Process query after stop ---
+async function processQuery() {
+  showPanel(2);
+  document.getElementById('bar-stt').style.width = '0%';
+  document.getElementById('bar-intent').style.width = '0%';
+  document.getElementById('proc-transcript').textContent = 'Processing question...';
+
+  await sleep(200);
+  document.getElementById('bar-stt').style.width = '100%';
+
+  const audioBlob = recordedBlob || makeSilentWav(recSeconds || 2);
+  const ext = recordedBlob ? 'webm' : 'wav';
+  const form = new FormData();
+  form.append('audio', audioBlob, `question.${ext}`);
+
+  try {
+    const headers = await makeHeaders();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    const resp = await fetch(`${BACKEND}/query`, {
+      method: 'POST',
+      headers: headers,
+      body: form,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    // Query always returns audio/mpeg
+    const contentType = resp.headers.get('content-type') || '';
+    if (!contentType.includes('audio')) {
+      throw new Error(`Unexpected response type: ${contentType}`);
+    }
+
+    const audioBlob = await resp.blob();
+    document.getElementById('bar-intent').style.width = '100%';
+    document.getElementById('proc-transcript').textContent = 'Playing response...';
+    log(`Query response: ${audioBlob.size} bytes audio`, 'ok');
+
+    // Play audio response
+    const url = URL.createObjectURL(audioBlob);
+    currentAudio = new Audio(url);
+    const audio = currentAudio;
+    audio.onended = async () => {
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+      updateVoiceBtn();
+      await fetchItems();
+      showPanel(0);
+      setBusy(false);
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+      log('Audio playback failed (mock mode returns silent MP3)', 'warn');
+      showPanel(0);
+      setBusy(false);
+    };
+
+    // Give a moment for the UI to show, then play
+    await sleep(500);
+    try {
+      await audio.play();
+    } catch(playErr) {
+      // Silent MP3 may fail to play in some browsers — that's ok in mock mode
+      log('Audio play skipped (silent/mock MP3)', 'warn');
+      await sleep(500);
+      showPanel(0);
+      setBusy(false);
+    }
+  } catch(e) {
+    const msg = e.name === 'AbortError' ? 'Request timed out' : e.message;
+    log(`Query failed: ${msg}`, 'err');
+    showPanel(0);
+    setBusy(false);
+  }
+}
+
+// --- Session Summary ---
+function renderSessionSummary(data) {
+  const domainCfg = DOMAINS.find(d => d.id === data.domain) || DOMAINS[3];
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  document.getElementById('session-header').textContent =
+    `${domainCfg.icon} ${domainCfg.name} · ${today} · ${data.count} items`;
+
+  const items = data.items || [];
+  const insights = items.filter(i => i.category === 'insight');
+  const actions  = items.filter(i => i.category === 'action');
+  const events   = items.filter(i => i.category === 'event');
+  const notes    = items.filter(i => !['insight','action','event'].includes(i.category));
+
+  let html = '';
+
+  function section(list, label, color) {
+    if (!list.length) return;
+    html += `<div class="session-category-title" style="color:${color}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color}"></span>${label}</div>`;
+    list.forEach(item => {
+      const meta = item.due_date || item.datetime || (item.recurrence ? `↻ ${item.recurrence}` : '');
+      html += `<div class="session-item-row" style="border-left-color:${color}">
+        <div class="session-item-title">${esc(item.title)}</div>
+        ${meta ? `<div class="session-item-meta">${esc(meta)}</div>` : ''}
+      </div>`;
+    });
+  }
+
+  section(insights, 'INSIGHTS', 'var(--amber)');
+  section(actions,  'ACTIONS',  'var(--purple)');
+  section(events,   'EVENTS',   'var(--teal)');
+  section(notes,    'NOTES',    '#666');
+
+  document.getElementById('session-body').innerHTML =
+    html || '<div style="text-align:center;color:var(--text-dim);padding:16px;font-size:11px;">No items extracted.</div>';
+
+  // Auto-return to home after 15 seconds of inactivity
+  clearTimeout(window._sessionTimer);
+  window._sessionTimer = setTimeout(() => { if (currentPanel === 7) showPanel(0); }, 15000);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// --- Health check + init ---
+async function init() {
+  renderDomainBar();
+  try {
+    const resp = await fetch(`${BACKEND}/health`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const h = await resp.json();
+    log(`Backend: ${h.mode} mode`, 'ok');
+    document.getElementById('conn-dot').classList.remove('offline');
+  } catch(e) {
+    log(`Backend offline: ${e.message}`, 'err');
+    document.getElementById('conn-dot').classList.add('offline');
+  }
+  await fetchItems();
+}
+
+init();
+</script>
+</body>
+</html>

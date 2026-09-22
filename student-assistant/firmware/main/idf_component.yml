@@ -1,0 +1,25 @@
+## IDF Component Manager dependencies
+## Run `idf.py reconfigure` after adding/changing
+
+dependencies:
+  # LVGL — same version as Waveshare factory firmware
+  lvgl/lvgl:
+    version: "~9.2.0"
+    public: true
+
+  # LVGL port for ESP-IDF (handles display/touch integration)
+  espressif/esp_lvgl_port:
+    version: "~2.4.0"
+    public: true
+
+  # Waveshare BSP — provides bsp_audio_codec_microphone_init() and
+  # esp_codec_dev for proper ES7210/ES8311 codec handling
+  waveshare/esp32_s3_touch_amoled_2_06:
+    version: "~1.0.0"
+    public: true
+
+  # minimp3 — included directly as minimp3.h (header-only)
+
+  # cJSON — JSON parsing (already in IDF, but ensure latest)
+  idf:
+    version: ">=5.3.0"
